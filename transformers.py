@@ -1,5 +1,17 @@
+import os
+import re
+import math
+import random
 import torch
 import torch.nn as nn
+import numpy as np
+from torch.nn import functional as F
+from torch.nn.attention.flex_attention import flex_attention, create_block_mask
+import triton
+import triton.language as tl
+from tqdm.notebook import tqdm
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class TransformerConfig:
     def __init__(self, vocab_size, seq_len, embed_size, head_num, layer_num):
