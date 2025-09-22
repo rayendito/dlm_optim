@@ -1,4 +1,5 @@
 import json, torch
+from tqdm import tqdm
 from transformers import TransformerConfig, TransformerLM
 
 def get_corpus(dataset_path):
@@ -25,14 +26,26 @@ def get_batch(data_split, seq_len, batch_size, device):
 
 
 if __name__ == "__main__":
+    # DEVICE "MACRO"
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    # DATASET MACROS
     TRAIN_SPLIT_SIZE = 0.99
     CORPUS_PATH = "data/animesubs.txt"
+    
+    # MODELING MACROS
     SEQ_LEN = 16
+    EMBEDDING_SIZE = 256
+    ATTN_HEAD_COUNT = 4
+    LAYER_NUM = 6
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # TRAINING MACROS
+    BATCH_SIZE = 256
+    TOTAL_STEPS = 5000
 
+    # TOKENIZER
     itoc, ctoi = get_vocab_dict()
-    vocab_size = len(itoc)
+    VOCAB_SIZE = len(itoc)
     encode = lambda s: [ctoi[ch] for ch in s]
     decode = lambda l: ''.join([itoc[i] for i in l])
 
@@ -42,57 +55,60 @@ if __name__ == "__main__":
     corpus_tokenized = torch.tensor(encode(corpus), dtype=torch.int64)
     train_data, val_data = get_train_val_split(corpus_tokenized, TRAIN_SPLIT_SIZE)
 
+    def train(
+        model,
+        optimizer,
+        total_steps,
+        seq_len = 256,
+        batch_size = 256,
+        val_steps = 10,
+        val_interval = 50
+    ):
+        losses = []
+        val_losses = []
+        for steps in (bar := tqdm(range(total_steps))):  # increase number of steps for good results...
+            # sample a batch of data
+            xb, yb = get_batch(train_data, seq_len=seq_len, batch_size=batch_size, device=device)
+
+            # evaluate the loss
+            logits, loss = model(xb, yb)
+
+            # backprop
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+
+            bar.set_description(f"loss: {loss.item():.2f}, val loss: {val_losses[-1] if val_losses else 0:.2f}")
+            losses.append(loss.item())
+            if steps % val_interval == 0:
+                # Calculate validation loss
+                with torch.no_grad():
+                    val_loss = 0
+                    for _ in range(val_steps):
+                        xb, yb = get_batch(val_data, seq_len=seq_len, batch_size=batch_size, device=device)
+                        _, loss = model(xb, yb)
+                        val_loss += loss.item()
+                    val_loss /= val_steps
+                    val_losses.append(val_loss)
+                    print('val loss:', val_loss)
+        print('final loss:', loss.item(), 'final val loss:', val_loss)
+
+    # MAKING THE MODEL
     model_config = TransformerConfig(
-        vocab_size=vocab_size,
+        vocab_size=VOCAB_SIZE,
         seq_len=SEQ_LEN,
-        embed_size=256,
-        head_num=4,
-        layer_num=6
+        embed_size=EMBEDDING_SIZE,
+        head_num=ATTN_HEAD_COUNT,
+        layer_num=LAYER_NUM
     )
     model = TransformerLM(model_config)
     model.to(device)
-    xb, yb = get_batch(train_data, 5, 1, device)
+
+    # ### SANITY CHECK FOR MODEL FORWARD PASS
+    xb, yb = get_batch(train_data, SEQ_LEN, 1, device)
     logits, loss = model(xb, yb)
 
-    breakpoint()
-
-
-    # def train(
-    #     model,
-    #     optimizer,
-    #     seq_len = 256,
-    #     batch_size = 256,
-    #     val_steps = 10,
-    #     val_interval = 50
-    # ):
-    #     total_steps = seq_len * batch_size
-    #     losses = []
-    #     val_losses = []
-    #     for steps in (bar := tqdm(range(total_steps))):  # increase number of steps for good results...
-    #         # sample a batch of data
-    #         xb, yb = get_batch(train_data, seq_len=seq_len, batch_size=batch_size)
-
-    #         # evaluate the loss
-    #         logits, loss = model(xb, yb)
-
-    #         # backprop
-    #         optimizer.zero_grad(set_to_none=True)
-    #         loss.backward()
-    #         optimizer.step()
-
-    #         bar.set_description(f"loss: {loss.item():.2f}, val loss: {val_losses[-1] if val_losses else 0:.2f}")
-    #         losses.append(loss.item())
-    #         if steps % val_interval == 0:
-    #             # Calculate validation loss
-    #             with torch.no_grad():
-    #                 val_loss = 0
-    #                 for _ in range(val_steps):
-    #                     xb, yb = get_batch(val_data, seq_len=seq_len, batch_size=batch_size)
-    #                     _, loss = model(xb, yb)
-    #                     val_loss += loss.item()
-    #                 val_loss /= val_steps
-    #                 val_losses.append(val_loss)
-    #                 print('val loss:', val_loss.item())
-    #     print('final loss:', loss.item(), 'final val loss:', val_loss)
-
-
+    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=TOTAL_STEPS, eta_min=1e-6)
+    
+    losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE)
