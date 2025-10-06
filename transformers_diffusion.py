@@ -1,12 +1,8 @@
-import random
 import torch
 import torch.nn as nn
 import numpy as np
 from torch.nn import functional as F
 from torch.nn.attention.flex_attention import flex_attention, create_block_mask
-import triton
-import triton.language as tl
-from tqdm.notebook import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -68,7 +64,7 @@ def apply_rotary_emb(
     # freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
     q_shape = [d if i == xq_.ndim - 2 or i == xq_.ndim - 1 else 1 for i, d in enumerate(xq_.shape)]
     k_shape = [d if i == xq_.ndim - 2 or i == xk_.ndim - 1 else 1 for i, d in enumerate(xk_.shape)]
-    T_q = xq_.shape[-2] 
+    T_q = xq_.shape[-2]
     q_freqs_cis = freqs_cis[-T_q:].view(*q_shape)
     k_freqs_cis = freqs_cis.view(*k_shape)
     xq_out = torch.view_as_real(xq_ * q_freqs_cis).flatten(xq.dim() - 1)
@@ -222,9 +218,9 @@ class DiffusionTransformerLM(nn.Module):
         gen_length: int=128, 
         block_length: int=128, 
         temperature=1, 
-        cfg_scale: float=0.0, 
+        cfg_scale: float=0.0,
         remasking: str="low_confidence", 
-        mask_id: int=85
+        mask_id: int=0
     ):
         """
         Args:

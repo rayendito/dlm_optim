@@ -35,14 +35,14 @@ if __name__ == "__main__":
     CORPUS_PATH = "data/cfg_artif_data.txt"
     
     # MODELING MACROS
-    SEQ_LEN = 16
+    SEQ_LEN = 512
     EMBEDDING_SIZE = 256
     ATTN_HEAD_COUNT = 4
     LAYER_NUM = 6
 
     # TRAINING MACROS
     BATCH_SIZE = 256
-    TOTAL_STEPS = 5000
+    TOTAL_STEPS = 1000
 
     # TOKENIZER
     itoc, ctoi = get_vocab_dict()
@@ -119,6 +119,12 @@ if __name__ == "__main__":
         print('final loss:', loss.item(), 'final val loss:', val_loss)
         return losses, val_losses
 
+    def test_generation(model, sentence):
+        idx = encode(sentence)
+        return decode(
+            model.generate(prompt=torch.tensor([idx], dtype=torch.long).to(device), steps=256, gen_length=128, block_length=32, temperature=1, cfg_scale=0, remasking='low_confidence')[0].tolist()
+        )
+
     # MAKING THE MODEL
     model_config = DiffusionTransformerConfig(
         vocab_size=VOCAB_SIZE,
@@ -128,13 +134,15 @@ if __name__ == "__main__":
         layer_num=LAYER_NUM
     )
     model = DiffusionTransformerLM(model_config)
-    model = torch.compile(model)
+    # model = torch.compile(model)
     model.to(device)
-
-    # ### SANITY CHECK FOR MODEL FORWARD PASS
-    xb, yb = get_batch(train_data, SEQ_LEN, 1, device)
-    logits, loss = model(xb, yb)
-
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
     
+    SENTENCE = "Once upon a time"
+    print("before ==================")
+    print(test_generation(model, SENTENCE))
+    
     losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE)
+    
+    print("after ==================")
+    print(test_generation(model, SENTENCE))
