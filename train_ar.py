@@ -1,6 +1,6 @@
 import json, torch
 from tqdm import tqdm
-from transformers import TransformerConfig, TransformerLM
+from transformers_ar import TransformerConfig, TransformerLM
 
 def get_corpus(dataset_path):
     with open(dataset_path, 'r', encoding='latin') as f:
@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
     # TRAINING MACROS
     BATCH_SIZE = 256
-    TOTAL_STEPS = 5000
+    TOTAL_STEPS = 1000
 
     # TOKENIZER
     itoc, ctoi = get_vocab_dict()
@@ -92,6 +92,14 @@ if __name__ == "__main__":
                     val_losses.append(val_loss)
                     print('val loss:', val_loss)
         print('final loss:', loss.item(), 'final val loss:', val_loss)
+        
+        return losses, val_losses
+    
+    def test_generation(model, sentence, max_new_tokens=50):
+        idx = encode(sentence)
+        return decode(
+            model.generate(idx=torch.tensor([idx], dtype=torch.long).to(device), max_new_tokens=max_new_tokens, temperature=0.5, use_cache=True)[0].tolist()
+        )
 
     # MAKING THE MODEL
     model_config = TransformerConfig(
@@ -102,13 +110,13 @@ if __name__ == "__main__":
         layer_num=LAYER_NUM
     )
     model = TransformerLM(model_config)
+    model = torch.compile(model)
     model.to(device)
-
-    # ### SANITY CHECK FOR MODEL FORWARD PASS
-    xb, yb = get_batch(train_data, SEQ_LEN, 1, device)
-    logits, loss = model(xb, yb)
-
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=TOTAL_STEPS, eta_min=1e-6)
-    
+
+    SENTENCE = "Once upon a time"
+    print("before ==================")
+    print(test_generation(model, SENTENCE))
     losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE)
+    print("after ==================")
+    print(test_generation(model, SENTENCE))
