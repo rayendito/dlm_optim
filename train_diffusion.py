@@ -1,51 +1,15 @@
-import json, torch
+import torch
 from tqdm import tqdm
 from transformers_diffusion import DiffusionTransformerConfig, DiffusionTransformerLM
 from torch.nn import functional as F
-
-def get_corpus(dataset_path):
-    with open(dataset_path, 'r', encoding='latin') as f:
-        text = f.read()
-    return text
-
-def get_vocab_dict():
-    # from the vocab.json file
-    loaded_json = json.load(open("vocab_withmask.json"))
-    itoc = {int(i):ch for i,ch in loaded_json.items()}
-    ctoi = {ch:i for i,ch in itoc.items()}
-    return itoc, ctoi
-
-def get_train_val_split(data, train_size):
-    n = int(len(data) * train_size)
-    return data[:n], data[n:]
-
-def get_batch(data_split, seq_len, batch_size, device):
-    ix = torch.randint(len(data_split) - seq_len, (batch_size,))
-    x = torch.stack([data_split[i:i+seq_len] for i in ix])
-    y = torch.stack([data_split[i+1:i+seq_len+1] for i in ix])
-    return x.to(device), y.to(device)
+from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, get_corpus, get_vocab_dict, get_train_val_split, get_batch
 
 if __name__ == "__main__":
     # DEVICE "MACRO"
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
-    # DATASET MACROS
-    TRAIN_SPLIT_SIZE = 0.99
-    # CORPUS_PATH = "data/animesubs.txt"
-    CORPUS_PATH = "data/cfg_artif_data.txt"
-    
-    # MODELING MACROS
-    SEQ_LEN = 512
-    EMBEDDING_SIZE = 256
-    ATTN_HEAD_COUNT = 4
-    LAYER_NUM = 6
-
-    # TRAINING MACROS
-    BATCH_SIZE = 256
-    TOTAL_STEPS = 1000
 
     # TOKENIZER
-    itoc, ctoi = get_vocab_dict()
+    itoc, ctoi = get_vocab_dict("vocab_withmask.json")
     VOCAB_SIZE = len(itoc)
     encode = lambda s: [ctoi[ch] for ch in s]
     decode = lambda l: ''.join([itoc[i] for i in l])
@@ -116,6 +80,7 @@ if __name__ == "__main__":
                         val_loss += val_loss_batch.item()
                     val_loss /= val_steps
                     val_losses.append(val_loss)
+                    print('val loss:', val_loss)
         print('final loss:', loss.item(), 'final val loss:', val_loss)
         return losses, val_losses
 
@@ -141,8 +106,6 @@ if __name__ == "__main__":
     SENTENCE = "Once upon a time"
     print("before ==================")
     print(test_generation(model, SENTENCE))
-    
     losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE)
-    
     print("after ==================")
     print(test_generation(model, SENTENCE))
