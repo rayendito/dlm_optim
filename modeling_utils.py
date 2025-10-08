@@ -3,7 +3,6 @@ import json
 
 # DATASET MACROS
 TRAIN_SPLIT_SIZE = 0.99
-# CORPUS_PATH = "data/cfg_artif_data.txt"
 CORPUS_PATH = "data/animesubs.txt"
 
 # MODELING MACROS
@@ -14,7 +13,7 @@ LAYER_NUM = 6
 
 # TRAINING MACROS
 BATCH_SIZE = 256
-TOTAL_STEPS = 500
+TOTAL_STEPS = 100
 
 
 def get_corpus(dataset_path):

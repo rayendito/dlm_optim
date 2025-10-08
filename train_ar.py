@@ -1,7 +1,8 @@
-import torch
+import torch, wandb
 from tqdm import tqdm
 from transformers_ar import TransformerConfig, TransformerLM
 from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, get_corpus, get_vocab_dict, get_train_val_split, get_batch
+from wandb_utils import get_wandb_config
 
 if __name__ == "__main__":
     # DEVICE "MACRO"
@@ -30,7 +31,7 @@ if __name__ == "__main__":
     ):
         losses = []
         val_losses = []
-        for steps in (bar := tqdm(range(total_steps))):  # increase number of steps for good results...
+        for step in (bar := tqdm(range(total_steps))):  # increase number of steps for good results...
             # sample a batch of data
             xb, yb = get_batch(train_data, seq_len=seq_len, batch_size=batch_size, device=device)
 
@@ -44,7 +45,13 @@ if __name__ == "__main__":
 
             bar.set_description(f"loss: {loss.item():.2f}, val loss: {val_losses[-1] if val_losses else 0:.2f}")
             losses.append(loss.item())
-            if steps % val_interval == 0:
+
+            wandb.log({
+                'train_loss': loss.item(),
+                'step': step
+            })
+
+            if step % val_interval == 0:
                 # Calculate validation loss
                 with torch.no_grad():
                     val_loss = 0
@@ -54,6 +61,10 @@ if __name__ == "__main__":
                         val_loss += loss.item()
                     val_loss /= val_steps
                     val_losses.append(val_loss)
+                    wandb.log({
+                        'val_loss': val_loss,
+                        'step': step
+                    })
                     print('val loss:', val_loss)
         print('final loss:', loss.item(), 'final val loss:', val_loss)
         return losses, val_losses
@@ -77,9 +88,28 @@ if __name__ == "__main__":
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
 
+    wandb_config = get_wandb_config(
+        model_type = "autoregressive",
+        variation = "default",
+        dataset = CORPUS_PATH,
+        model = model,
+        optimizer=optimizer,
+        seq_len=SEQ_LEN,
+        batch_size=BATCH_SIZE,
+        total_steps=TOTAL_STEPS
+    )
+
     SENTENCE = "Once upon a time"
     print("before ==================")
     print(test_generation(model, SENTENCE))
+    
+    wandb.init(
+        entity="rayendito",
+        project="dlm_optim",
+        config=wandb_config,
+    )
     losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE)
+    wandb.finish()
+
     print("after ==================")
     print(test_generation(model, SENTENCE))
