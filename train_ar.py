@@ -1,7 +1,7 @@
 import torch, wandb, re
 from tqdm import tqdm
 from transformers_ar import TransformerConfig, TransformerLM
-from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, load_checkpoint
+from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
 from wandb_utils import get_wandb_config, save_checkpoint
 
 if __name__ == "__main__":
@@ -9,6 +9,7 @@ if __name__ == "__main__":
     TRAINING_VARIATION = "default"
     EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}"
     CHECKPOINT_PATH = "model_checkpoints/autoregressive_default_checkpoint_step_999.pt"
+    # CHECKPOINT_PATH = None
     CHECKPOINT_STEP_COUNT = 0
     if CHECKPOINT_PATH is not None:
         CHECKPOINT_STEP_COUNT = int(re.search(r'\d+', CHECKPOINT_PATH).group())
@@ -35,12 +36,16 @@ if __name__ == "__main__":
         total_steps,
         seq_len = 256,
         batch_size = 256,
+        data_pull_index = None
     ):
         losses = []
         val_losses = []
         for step in (bar := tqdm(range(total_steps))):  # increase number of steps for good results...
             # sample a batch of data
-            xb, yb = get_batch(train_data, seq_len=seq_len, batch_size=batch_size, device=device)
+            if(data_pull_index):
+                xb, yb = get_batch_sequential(train_data, seq_len=seq_len, batch_size=batch_size, device=device, start_index=data_pull_index)
+            else:
+                xb, yb = get_batch(train_data, seq_len=seq_len, batch_size=batch_size, device=device)
 
             # evaluate the loss
             logits, loss = model(xb, yb)
@@ -52,7 +57,7 @@ if __name__ == "__main__":
 
             bar.set_description(f"loss: {loss.item():.2f}, val loss: {val_losses[-1] if val_losses else 0:.2f}")
             losses.append(loss.item())
-
+            data_pull_index += batch_size
             wandb.log({
                 'train_loss': loss.item(),
                 'step': step
@@ -84,7 +89,8 @@ if __name__ == "__main__":
                     seq_len=seq_len,
                     batch_size=batch_size,
                     total_steps=total_steps,
-                    ckpt_name=EXP_NAME
+                    ckpt_name=EXP_NAME,
+                    data_pull_index=data_pull_index,
                 )
         print('final loss:', loss.item(), 'final val loss:', val_loss)
         save_checkpoint(
@@ -96,6 +102,7 @@ if __name__ == "__main__":
             seq_len=seq_len,
             batch_size=batch_size,
             total_steps=total_steps,
+            data_pull_index=data_pull_index,
             ckpt_name=EXP_NAME
         )
         return losses, val_losses
@@ -118,13 +125,14 @@ if __name__ == "__main__":
     model.to(device)
     # model = torch.compile(model)
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
+    data_pull_index = 0
     if CHECKPOINT_PATH is not None:
-        load_checkpoint(
+        _, _, _, data_pull_index = load_checkpoint(
             checkpoint_path=CHECKPOINT_PATH,
             model=model,
-            optimizer=optimizer,
-            device=device
+            optimizer=optimizer
         )
+        breakpoint()
     
     wandb_config = get_wandb_config(
         model_type = MODEL_TYPE,
@@ -147,7 +155,7 @@ if __name__ == "__main__":
         name=EXP_NAME,
         config=wandb_config,
     )
-    losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE)
+    losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE, data_pull_index=data_pull_index)
     wandb.finish()
 
     print("after ==================")

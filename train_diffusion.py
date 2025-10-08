@@ -4,7 +4,6 @@ from transformers_diffusion import DiffusionTransformerConfig, DiffusionTransfor
 from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
 from wandb_utils import get_wandb_config, save_checkpoint
 
-
 if __name__ == "__main__":
     MODEL_TYPE = "diffusion"
     TRAINING_VARIATION = "default"
@@ -55,7 +54,6 @@ if __name__ == "__main__":
         for step in (bar := tqdm(range(total_steps))):  # increase number of steps for good results...
             # sample a batch of data
             if(data_pull_index):
-                breakpoint()
                 xb, yb = get_batch_sequential(train_data, seq_len=seq_len, batch_size=batch_size, device=device, start_index=data_pull_index)
             else:
                 xb, yb = get_batch(train_data, seq_len=seq_len, batch_size=batch_size, device=device)
