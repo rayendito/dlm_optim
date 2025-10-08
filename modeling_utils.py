@@ -43,7 +43,16 @@ def get_batch(data_split, seq_len, batch_size, device):
     y = torch.stack([data_split[i+1:i+seq_len+1] for i in ix])
     return x.to(device), y.to(device)
 
-def load_checkpoint(checkpoint_path, model, optimizer, device):
+def get_batch_sequential(data_split, seq_len, batch_size, device, start_index):
+    data_len = len(data_split)
+    x, y = [], []
+    for b in range(batch_size):
+        i = (start_index + b) % (data_len - seq_len)
+        x.append(data_split[i:i+seq_len])
+        y.append(data_split[i+1:i+seq_len+1])
+    return torch.stack(x).to(device), torch.stack(y).to(device)
+
+def load_checkpoint(checkpoint_path, model, optimizer):
     """Load a checkpoint and restore model, optimizer, scheduler states"""
     checkpoint = torch.load(checkpoint_path)
     
@@ -51,4 +60,4 @@ def load_checkpoint(checkpoint_path, model, optimizer, device):
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     
     print(f"Diffusion checkpoint loaded from step {checkpoint['step']}")
-    return checkpoint['step'], checkpoint['train_losses'], checkpoint['val_losses']
+    return checkpoint['step'], checkpoint['train_losses'], checkpoint['val_losses'], checkpoint['config']['data_pull_index']

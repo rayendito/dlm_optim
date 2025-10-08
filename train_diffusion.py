@@ -1,7 +1,7 @@
 import torch, wandb, re
 from tqdm import tqdm
 from transformers_diffusion import DiffusionTransformerConfig, DiffusionTransformerLM
-from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, load_checkpoint
+from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
 from wandb_utils import get_wandb_config, save_checkpoint
 
 
@@ -10,6 +10,7 @@ if __name__ == "__main__":
     TRAINING_VARIATION = "default"
     EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}"
     CHECKPOINT_PATH = "model_checkpoints/diffusion_default_checkpoint_step_999.pt"
+    # CHECKPOINT_PATH = None
     CHECKPOINT_STEP_COUNT = 0
     if CHECKPOINT_PATH is not None:
         CHECKPOINT_STEP_COUNT = int(re.search(r'\d+', CHECKPOINT_PATH).group())
@@ -47,12 +48,17 @@ if __name__ == "__main__":
             total_steps,
             seq_len = 256,
             batch_size = 256,
+            data_pull_index = None
     ):
         losses = []
         val_losses = []
         for step in (bar := tqdm(range(total_steps))):  # increase number of steps for good results...
             # sample a batch of data
-            xb, yb = get_batch(train_data, seq_len=seq_len, batch_size=batch_size, device=device)
+            if(data_pull_index):
+                breakpoint()
+                xb, yb = get_batch_sequential(train_data, seq_len=seq_len, batch_size=batch_size, device=device, start_index=data_pull_index)
+            else:
+                xb, yb = get_batch(train_data, seq_len=seq_len, batch_size=batch_size, device=device)
 
             # regularization. truncate the input dim to 1% of the training steps
             # if torch.rand(1) < 0.01:
@@ -80,6 +86,7 @@ if __name__ == "__main__":
 
             bar.set_description(f"loss: {loss.item():.2f}, val loss: {val_losses[-1] if val_losses else 0:.2f}")
             losses.append(loss.item())
+            data_pull_index += batch_size
             if step % VAL_INTERVAL == 0:
                 # Calculate validation loss
                 with torch.no_grad():
@@ -106,6 +113,7 @@ if __name__ == "__main__":
                     seq_len=seq_len,
                     batch_size=batch_size,
                     total_steps=total_steps,
+                    data_pull_index=data_pull_index,
                     ckpt_name=EXP_NAME
                 )
         print('final loss:', loss.item(), 'final val loss:', val_loss)
@@ -118,6 +126,7 @@ if __name__ == "__main__":
             seq_len=seq_len,
             batch_size=batch_size,
             total_steps=total_steps,
+            data_pull_index=data_pull_index,
             ckpt_name=EXP_NAME
         )
         return losses, val_losses
@@ -140,14 +149,14 @@ if __name__ == "__main__":
     # model = torch.compile(model)
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
+    data_pull_index = 0
     if CHECKPOINT_PATH is not None:
-        load_checkpoint(
+        _, _, _, data_pull_index = load_checkpoint(
             checkpoint_path=CHECKPOINT_PATH,
             model=model,
-            optimizer=optimizer,
-            device=device
+            optimizer=optimizer
         )
-    
+
     wandb_config = get_wandb_config(
         model_type = MODEL_TYPE,
         variation = TRAINING_VARIATION,
@@ -169,7 +178,7 @@ if __name__ == "__main__":
         name=EXP_NAME,
         config=wandb_config,
     )
-    losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE)
+    losses, val_losses,  = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE, data_pull_index=data_pull_index)
     wandb.finish()
 
     print("after ==================")

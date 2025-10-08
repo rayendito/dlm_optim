@@ -22,7 +22,7 @@ def get_wandb_config(model_type, variation, dataset, model, optimizer, seq_len, 
 
     return config
 
-def save_checkpoint(model, optimizer, step, losses, val_losses, seq_len, batch_size, total_steps, ckpt_name, save_dir="model_checkpoints"):
+def save_checkpoint(model, optimizer, step, losses, val_losses, seq_len, batch_size, total_steps, ckpt_name, data_pull_index, save_dir="model_checkpoints"):
     """Save a complete checkpoint including model, optimizer, scheduler states and training metrics"""
     os.makedirs(save_dir, exist_ok=True)
     
@@ -39,7 +39,8 @@ def save_checkpoint(model, optimizer, step, losses, val_losses, seq_len, batch_s
             'vocab_size': model.token_embedding_table.num_embeddings,
             'embed_size': model.blocks[0].sa_heads.head_size * model.head_num,
             'head_num': model.head_num,
-            'layer_num': model.layer_num
+            'layer_num': model.layer_num,
+            'data_pull_index': data_pull_index,
         }
     }
     
