@@ -2,7 +2,7 @@ import torch, wandb
 from tqdm import tqdm
 from transformers_diffusion import DiffusionTransformerConfig, DiffusionTransformerLM
 from torch.nn import functional as F
-from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch
+from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, load_checkpoint
 from wandb_utils import get_wandb_config, save_checkpoint
 
 
@@ -10,6 +10,7 @@ if __name__ == "__main__":
     MODEL_TYPE = "diffusion"
     TRAINING_VARIATION = "default"
     EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}"
+    CHECKPOINT_PATH = "model_checkpoints/diffusion_default_checkpoint_step_999.pt"
 
     # DEVICE "MACRO"
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -136,7 +137,14 @@ if __name__ == "__main__":
     # model = torch.compile(model)
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
-
+    if CHECKPOINT_PATH is not None:
+        load_checkpoint(
+            checkpoint_path=CHECKPOINT_PATH,
+            model=model,
+            optimizer=optimizer,
+            device=device
+        )
+    
     wandb_config = get_wandb_config(
         model_type = MODEL_TYPE,
         variation = TRAINING_VARIATION,
