@@ -5,6 +5,9 @@ from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZ
 from wandb_utils import get_wandb_config
 
 if __name__ == "__main__":
+    MODEL_TYPE = "autoregressive"
+    TRAINING_VARIATION = "default"
+
     # DEVICE "MACRO"
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -89,8 +92,8 @@ if __name__ == "__main__":
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
 
     wandb_config = get_wandb_config(
-        model_type = "autoregressive",
-        variation = "default",
+        model_type = MODEL_TYPE,
+        variation = TRAINING_VARIATION,
         dataset = CORPUS_PATH,
         model = model,
         optimizer=optimizer,
@@ -106,6 +109,7 @@ if __name__ == "__main__":
     wandb.init(
         entity="rayendito",
         project="dlm_optim",
+        name=f"{MODEL_TYPE}_{TRAINING_VARIATION}",
         config=wandb_config,
     )
     losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE)

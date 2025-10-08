@@ -13,7 +13,7 @@ LAYER_NUM = 6
 
 # TRAINING MACROS
 BATCH_SIZE = 256
-TOTAL_STEPS = 100
+TOTAL_STEPS = 1000
 
 
 def get_corpus(dataset_path):
