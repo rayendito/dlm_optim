@@ -1,7 +1,6 @@
-import torch, wandb
+import torch, wandb, re
 from tqdm import tqdm
 from transformers_diffusion import DiffusionTransformerConfig, DiffusionTransformerLM
-from torch.nn import functional as F
 from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, load_checkpoint
 from wandb_utils import get_wandb_config, save_checkpoint
 
@@ -11,7 +10,11 @@ if __name__ == "__main__":
     TRAINING_VARIATION = "default"
     EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}"
     CHECKPOINT_PATH = "model_checkpoints/diffusion_default_checkpoint_step_999.pt"
-
+    CHECKPOINT_STEP_COUNT = 0
+    if CHECKPOINT_PATH is not None:
+        CHECKPOINT_STEP_COUNT = int(re.search(r'\d+', CHECKPOINT_PATH).group())
+        EXP_NAME = f"{CHECKPOINT_STEP_COUNT}_" + EXP_NAME
+    
     # DEVICE "MACRO"
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -97,7 +100,7 @@ if __name__ == "__main__":
                 save_checkpoint(
                     model=model,
                     optimizer=optimizer,
-                    step=step,
+                    step=step+CHECKPOINT_STEP_COUNT,
                     losses=losses,
                     val_losses=val_losses,
                     seq_len=seq_len,
@@ -109,7 +112,7 @@ if __name__ == "__main__":
         save_checkpoint(
             model=model,
             optimizer=optimizer,
-            step=step,
+            step=step+CHECKPOINT_STEP_COUNT,
             losses=losses,
             val_losses=val_losses,
             seq_len=seq_len,
