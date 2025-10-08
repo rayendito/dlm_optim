@@ -1,12 +1,13 @@
 import torch, wandb
 from tqdm import tqdm
 from transformers_ar import TransformerConfig, TransformerLM
-from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, get_corpus, get_vocab_dict, get_train_val_split, get_batch
-from wandb_utils import get_wandb_config
+from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch
+from wandb_utils import get_wandb_config, save_checkpoint
 
 if __name__ == "__main__":
     MODEL_TYPE = "autoregressive"
     TRAINING_VARIATION = "default"
+    EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}"
 
     # DEVICE "MACRO"
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -29,8 +30,6 @@ if __name__ == "__main__":
         total_steps,
         seq_len = 256,
         batch_size = 256,
-        val_steps = 10,
-        val_interval = 50
     ):
         losses = []
         val_losses = []
@@ -54,22 +53,46 @@ if __name__ == "__main__":
                 'step': step
             })
 
-            if step % val_interval == 0:
+            if step % VAL_INTERVAL == 0:
                 # Calculate validation loss
                 with torch.no_grad():
                     val_loss = 0
-                    for _ in range(val_steps):
+                    for _ in range(VAL_STEPS):
                         xb, yb = get_batch(val_data, seq_len=seq_len, batch_size=batch_size, device=device)
                         _, loss = model(xb, yb)
                         val_loss += loss.item()
-                    val_loss /= val_steps
+                    val_loss /= VAL_STEPS
                     val_losses.append(val_loss)
                     wandb.log({
                         'val_loss': val_loss,
                         'step': step
                     })
                     print('val loss:', val_loss)
+            
+            if step % CHECKPOINT_INTERVAL == 0:
+                save_checkpoint(
+                    model=model,
+                    optimizer=optimizer,
+                    step=step,
+                    losses=losses,
+                    val_losses=val_losses,
+                    seq_len=seq_len,
+                    batch_size=batch_size,
+                    total_steps=total_steps,
+                    ckpt_name=EXP_NAME
+                )
         print('final loss:', loss.item(), 'final val loss:', val_loss)
+        save_checkpoint(
+            model=model,
+            optimizer=optimizer,
+            step=step,
+            losses=losses,
+            val_losses=val_losses,
+            seq_len=seq_len,
+            batch_size=batch_size,
+            total_steps=total_steps,
+            ckpt_name=EXP_NAME
+        )
         return losses, val_losses
     
     def test_generation(model, sentence, max_new_tokens=50):
@@ -109,7 +132,7 @@ if __name__ == "__main__":
     wandb.init(
         entity="rayendito",
         project="dlm_optim",
-        name=f"{MODEL_TYPE}_{TRAINING_VARIATION}",
+        name=EXP_NAME,
         config=wandb_config,
     )
     losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE)
