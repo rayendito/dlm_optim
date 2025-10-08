@@ -54,7 +54,7 @@ if __name__ == "__main__":
             noisy_batch, masked_indices, p_mask = mask_tokens_batch(xb)
 
             # evaluate the loss using standard next-token prediction
-            logits = model(noisy_batch)[0]
+            logits, loss = model(noisy_batch)
             token_loss = F.cross_entropy(
                 logits[masked_indices], xb[masked_indices], reduction='none'
             ) / p_mask[masked_indices]
@@ -74,9 +74,7 @@ if __name__ == "__main__":
                     for _ in range(val_steps):
                         xb, yb = get_batch(val_data, seq_len=seq_len, batch_size=batch_size, device=device)
                         noisy_batch, masked_indices, p_mask = mask_tokens_batch(xb)
-                        logits = model(noisy_batch)[0]
-                        token_loss = F.cross_entropy(logits[masked_indices], xb[masked_indices], reduction='none') / p_mask[masked_indices]
-                        val_loss_batch = token_loss.sum() / (xb.shape[0] * xb.shape[1])
+                        logits, val_loss_batch = model(noisy_batch, targets=xb, masked_indices=masked_indices, p_mask=p_mask)
                         val_loss += val_loss_batch.item()
                     val_loss /= val_steps
                     val_losses.append(val_loss)

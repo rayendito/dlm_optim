@@ -183,7 +183,7 @@ class DiffusionTransformerLM(nn.Module):
         # transformer blocks
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.layer_num)])
 
-    def forward(self, idx, masked_indices=None, p_mask=None, kv_cache=None):
+    def forward(self, idx, targets=None, masked_indices=None, p_mask=None, kv_cache=None):
         B, T = idx.shape
         _, _, T_past, _ = kv_cache[0][0].shape if kv_cache is not None and kv_cache[0][0] is not None else (0, 0, 0, 0)
         # idx and targets are both (B,T) tensor of integers
@@ -197,14 +197,14 @@ class DiffusionTransformerLM(nn.Module):
         # get logits with linear layer
         logits = self.lm_head(x) # (B,T,V)
         
-        if masked_indices is None or p_mask is None:
+        if targets==None:
             loss = None
         else:
-            B, T, V = logits.shape
+            assert masked_indices is not None
+            assert p_mask is not None
+
             logits = logits[masked_indices]
-            targets = idx[masked_indices]
-            # logits = logits.view(B*T, V)
-            # targets = targets.view(B*T)
+            targets = targets[masked_indices]
             token_loss = F.cross_entropy(logits, targets, reduction="none") / p_mask[masked_indices]
             loss = token_loss.sum() / (idx.shape[0] * idx.shape[1])
 
