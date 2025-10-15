@@ -1,4 +1,4 @@
-import torch, wandb, re
+import torch, wandb, re, argparse
 from tqdm import tqdm
 from architecture.transformers_ar import TransformerConfig, TransformerLM
 from utils.modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
@@ -13,6 +13,11 @@ if __name__ == "__main__":
     if CHECKPOINT_PATH is not None:
         CHECKPOINT_STEP_COUNT = int(re.search(r'\d+', CHECKPOINT_PATH).group())
         EXP_NAME = f"{CHECKPOINT_STEP_COUNT}_" + EXP_NAME
+
+    # DISABLING WANDB LOGS FOR DEBUGGING
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--disable_log", action="store_true")
+    DISABLE_LOG = parser.parse_args().disable_log
 
     # DEVICE "MACRO"
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -57,10 +62,12 @@ if __name__ == "__main__":
             bar.set_description(f"loss: {loss.item():.2f}, val loss: {val_losses[-1] if val_losses else 0:.2f}")
             losses.append(loss.item())
             data_pull_index += batch_size * seq_len
-            wandb.log({
-                'train_loss': loss.item(),
-                'step': step
-            })
+            
+            if not DISABLE_LOG:
+                wandb.log({
+                    'train_loss': loss.item(),
+                    'step': step
+                })
 
             if step % VAL_INTERVAL == 0:
                 # Calculate validation loss
@@ -72,10 +79,11 @@ if __name__ == "__main__":
                         val_loss += loss.item()
                     val_loss /= VAL_STEPS
                     val_losses.append(val_loss)
-                    wandb.log({
-                        'val_loss': val_loss,
-                        'step': step
-                    })
+                    if not DISABLE_LOG:
+                        wandb.log({
+                            'val_loss': val_loss,
+                            'step': step
+                        })
                     print('val loss:', val_loss)
             
             if step % CHECKPOINT_INTERVAL == 0:
@@ -133,29 +141,34 @@ if __name__ == "__main__":
         )
         breakpoint()
     
-    wandb_config = get_wandb_config(
-        model_type = MODEL_TYPE,
-        variation = TRAINING_VARIATION,
-        dataset = CORPUS_PATH,
-        model = model,
-        optimizer=optimizer,
-        seq_len=SEQ_LEN,
-        batch_size=BATCH_SIZE,
-        total_steps=TOTAL_STEPS
-    )
+    if not DISABLE_LOG:
+        wandb_config = get_wandb_config(
+            model_type = MODEL_TYPE,
+            variation = TRAINING_VARIATION,
+            dataset = CORPUS_PATH,
+            model = model,
+            optimizer=optimizer,
+            seq_len=SEQ_LEN,
+            batch_size=BATCH_SIZE,
+            total_steps=TOTAL_STEPS
+        )
 
     SENTENCE = "Once upon a time"
     print("before ==================")
     print(test_generation(model, SENTENCE))
     
-    wandb.init(
-        entity="rayendito",
-        project="dlm_optim",
-        name=EXP_NAME,
-        config=wandb_config,
-    )
+    if not DISABLE_LOG:
+        wandb.init(
+            entity="rayendito",
+            project="dlm_optim",
+            name=EXP_NAME,
+            config=wandb_config,
+        )
+    
     losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE, data_pull_index=data_pull_index)
-    wandb.finish()
+    
+    if not DISABLE_LOG:
+        wandb.finish()
 
     print("after ==================")
     print(test_generation(model, SENTENCE))
