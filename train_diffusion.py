@@ -1,7 +1,8 @@
-import torch, wandb, re
+import torch, wandb, re, argparse
 from tqdm import tqdm
 from architecture.transformers_diffusion import DiffusionTransformerConfig, DiffusionTransformerLM
-from utils.modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
+from train_hyperparams import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL
+from utils.modeling_utils import get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
 from utils.wandb_utils import get_wandb_config, save_checkpoint
 
 if __name__ == "__main__":
@@ -14,6 +15,11 @@ if __name__ == "__main__":
         CHECKPOINT_STEP_COUNT = int(re.search(r'\d+', CHECKPOINT_PATH).group())
         EXP_NAME = f"{CHECKPOINT_STEP_COUNT}_" + EXP_NAME
     
+    # DISABLING WANDB LOGS FOR DEBUGGING
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--disable_log", action="store_true")
+    DISABLE_LOG = parser.parse_args().disable_log
+
     # DEVICE "MACRO"
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -75,11 +81,11 @@ if __name__ == "__main__":
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
-
-            wandb.log({
-                'train_loss': loss.item(),
-                'step': step
-            })
+            if not DISABLE_LOG:
+                wandb.log({
+                    'train_loss': loss.item(),
+                    'step': step
+                })
 
             bar.set_description(f"loss: {loss.item():.2f}, val loss: {val_losses[-1] if val_losses else 0:.2f}")
             losses.append(loss.item())
@@ -95,37 +101,42 @@ if __name__ == "__main__":
                         val_loss += val_loss_batch.item()
                     val_loss /= VAL_STEPS
                     val_losses.append(val_loss)
-                    wandb.log({
-                        'val_loss': val_loss,
-                        'step': step
-                    })
+                    if not DISABLE_LOG:
+                        wandb.log({
+                            'val_loss': val_loss,
+                            'step': step
+                        })
                     print('val loss:', val_loss)
             if step % CHECKPOINT_INTERVAL == 0:
-                save_checkpoint(
-                    model=model,
-                    optimizer=optimizer,
-                    step=step+CHECKPOINT_STEP_COUNT,
-                    losses=losses,
-                    val_losses=val_losses,
-                    seq_len=seq_len,
-                    batch_size=batch_size,
-                    total_steps=total_steps,
-                    data_pull_index=data_pull_index,
-                    ckpt_name=EXP_NAME
-                )
+                # TODO(?) decouple saving checkpoint locally and to wandb
+                if not DISABLE_LOG:
+                    save_checkpoint(
+                        model=model,
+                        optimizer=optimizer,
+                        step=step+CHECKPOINT_STEP_COUNT,
+                        losses=losses,
+                        val_losses=val_losses,
+                        seq_len=seq_len,
+                        batch_size=batch_size,
+                        total_steps=total_steps,
+                        data_pull_index=data_pull_index,
+                        ckpt_name=EXP_NAME
+                    )
         print('final loss:', loss.item(), 'final val loss:', val_loss)
-        save_checkpoint(
-            model=model,
-            optimizer=optimizer,
-            step=step+CHECKPOINT_STEP_COUNT,
-            losses=losses,
-            val_losses=val_losses,
-            seq_len=seq_len,
-            batch_size=batch_size,
-            total_steps=total_steps,
-            data_pull_index=data_pull_index,
-            ckpt_name=EXP_NAME
-        )
+        # TODO(?) decouple saving checkpoint locally and to wandb
+        if not DISABLE_LOG:
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                step=step+CHECKPOINT_STEP_COUNT,
+                losses=losses,
+                val_losses=val_losses,
+                seq_len=seq_len,
+                batch_size=batch_size,
+                total_steps=total_steps,
+                data_pull_index=data_pull_index,
+                ckpt_name=EXP_NAME
+            )
         return losses, val_losses
 
     def test_generation(model, sentence):
@@ -169,14 +180,17 @@ if __name__ == "__main__":
     print("before ==================")
     print(test_generation(model, SENTENCE))
     
-    wandb.init(
-        entity="rayendito",
-        project="dlm_optim",
-        name=EXP_NAME,
-        config=wandb_config,
-    )
+    if not DISABLE_LOG:
+        wandb.init(
+            entity="rayendito",
+            project="dlm_optim",
+            name=EXP_NAME,
+            config=wandb_config,
+        )
     losses, val_losses,  = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE, data_pull_index=data_pull_index)
-    wandb.finish()
+    
+    if not DISABLE_LOG:
+        wandb.finish()
 
     print("after ==================")
     print(test_generation(model, SENTENCE))
