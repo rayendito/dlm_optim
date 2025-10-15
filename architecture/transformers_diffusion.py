@@ -118,7 +118,7 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, x, kv_cache=None):
         B, T, C = x.shape
-        _, _, T_past, _ = kv_cache[0].shape if kv_cache is not None and kv_cache[0] is not None else (0, 0, 0, 0)
+        # _, _, T_past, _ = kv_cache[0].shape if kv_cache is not None and kv_cache[0] is not None else (0, 0, 0, 0)
         q = self.query(x) # (B,T,C)
         k = self.key(x)   # (B,T,C)
         v = self.value(x) # (B,T,C)
@@ -141,14 +141,11 @@ class MultiHeadAttention(nn.Module):
         q, k = apply_rotary_emb(q, k, self.freqs_cis[:T_k])
 
         if T == self.seq_len:
-            out = flex_attention(q, k, v, block_mask=self.causal_mask)
+            out = flex_attention(q, k, v, block_mask=None)
         else:
             # compute attention scores ("affinities")
             wei = q @ k.transpose(-2,-1) # (B, H, 1, C/H) @ (B, H, C/H, T) -> (B, H, 1, T)
             wei = wei * self.head_size ** -0.5 # scaled attention
-            
-            # no attention masking in diffusion models
-            # wei = wei.masked_fill(self.tril[T_k-T:T_k, T_k-T:T_k] == 0, float('-inf')) # (B, T, T)
             
             wei = F.softmax(wei, dim=-1) # (B, H, T, T)
             # apply attention to values
