@@ -5,6 +5,22 @@ from train_hyperparams import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_
 from utils.modeling_utils import get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
 from utils.wandb_utils import get_wandb_config, save_checkpoint
 
+MASK_INDEX = 0 # ctoi["\U0001F0A0"]
+
+def mask_tokens_batch(input_ids,  eps: float=1e-3, fixed_p_mask = None):
+    b, l = input_ids.shape # batch size, length
+    if fixed_p_mask is not None:
+        assert fixed_p_mask > 0
+        t = torch.tensor([fixed_p_mask] * b, device=input_ids.device, dtype=torch.float32)
+    else:
+        t = torch.rand(b, device=input_ids.device)
+    p_mask = (1 - eps) * t + eps # making sure it's not 0. add with some eps
+    p_mask = p_mask[:, None].repeat(1, l) # multiplying it by the dimension
+    masked_indices = torch.rand((b, l), device=input_ids.device) < p_mask # masked_indices: bool^{b x l}
+    mask_token_idx = MASK_INDEX
+    noisy_batch = torch.where(masked_indices, mask_token_idx, input_ids) # noisy_batch: token_idx^{b x l}
+    return noisy_batch, masked_indices, p_mask
+
 if __name__ == "__main__":
     MODEL_TYPE = "diffusion"
     TRAINING_VARIATION = "default"
@@ -34,17 +50,6 @@ if __name__ == "__main__":
 
     corpus_tokenized = torch.tensor(encode(corpus), dtype=torch.int64)
     train_data, val_data = get_train_val_split(corpus_tokenized, TRAIN_SPLIT_SIZE)
-
-    def mask_tokens_batch(input_ids, eps: float=1e-3):
-        b, l = input_ids.shape # batch size, length
-        t = torch.rand(b, device=input_ids.device)
-        p_mask = (1 - eps) * t + eps # making sure it's not 0. add with some eps
-        p_mask = p_mask[:, None].repeat(1, l) # multiplying it by the dimension
-
-        masked_indices = torch.rand((b, l), device=input_ids.device) < p_mask # masked_indices: bool^{b x l}
-        mask_token_idx = ctoi["\U0001F0A0"]
-        noisy_batch = torch.where(masked_indices, mask_token_idx, input_ids) # noisy_batch: token_idx^{b x l}
-        return noisy_batch, masked_indices, p_mask
     
     def train(
             model,
