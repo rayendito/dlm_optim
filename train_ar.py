@@ -1,8 +1,8 @@
 import torch, wandb, re
 from tqdm import tqdm
 from architecture.transformers_ar import TransformerConfig, TransformerLM
-from modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
-from wandb_utils import get_wandb_config, save_checkpoint
+from utils.modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
+from utils.wandb_utils import get_wandb_config, save_checkpoint
 
 if __name__ == "__main__":
     MODEL_TYPE = "autoregressive"
@@ -19,7 +19,7 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # TOKENIZER
-    itoc, ctoi = get_vocab_dict("vocab.json")
+    itoc, ctoi = get_vocab_dict("vocab/vocab.json")
     VOCAB_SIZE = len(itoc)
     encode = lambda s: [ctoi[ch] for ch in s]
     decode = lambda l: ''.join([itoc[i] for i in l])
