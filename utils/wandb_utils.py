@@ -1,6 +1,6 @@
 import os, torch, wandb
 
-def get_wandb_config(model_type, variation, dataset, model, optimizer, seq_len, batch_size, total_steps):
+def get_wandb_config(model_type, variation, dataset, model, optimizer, scheduler, seq_len, batch_size, total_steps):
     config = {
         "model_type": model_type,
         "variation": variation,
@@ -9,6 +9,7 @@ def get_wandb_config(model_type, variation, dataset, model, optimizer, seq_len, 
         "batch_size": batch_size,
         "total_steps": total_steps,
         "optimizer": optimizer.__class__.__name__,
+        "scheduler": scheduler.__class__.__name__,
         "initial_lr": optimizer.param_groups[0]['lr'],
     }
 
@@ -20,9 +21,15 @@ def get_wandb_config(model_type, variation, dataset, model, optimizer, seq_len, 
         "total_params": sum(p.numel() for p in model.parameters() if p.requires_grad)
     })
 
+    # Add scheduler-specific config
+    if hasattr(scheduler, 'T_max'):
+        config['scheduler_T_max'] = scheduler.T_max
+    if hasattr(scheduler, 'eta_min'):
+        config['scheduler_eta_min'] = scheduler.eta_min
+
     return config
 
-def save_checkpoint(model, optimizer, step, losses, val_losses, seq_len, batch_size, total_steps, ckpt_name, data_pull_index, save_dir="model_checkpoints"):
+def save_checkpoint(model, optimizer, scheduler, step, losses, val_losses, seq_len, batch_size, total_steps, ckpt_name, data_pull_index, save_dir="model_checkpoints"):
     """Save a complete checkpoint including model, optimizer, scheduler states and training metrics"""
     os.makedirs(save_dir, exist_ok=True)
     
@@ -30,6 +37,7 @@ def save_checkpoint(model, optimizer, step, losses, val_losses, seq_len, batch_s
         'step': step,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
         'train_losses': losses,
         'val_losses': val_losses,
         'config': {

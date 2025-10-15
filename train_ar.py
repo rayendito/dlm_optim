@@ -38,6 +38,7 @@ if __name__ == "__main__":
     def train(
         model,
         optimizer,
+        scheduler,
         total_steps,
         seq_len = 256,
         batch_size = 256,
@@ -51,11 +52,6 @@ if __name__ == "__main__":
             else:
                 xb, yb = get_batch(train_data, seq_len=seq_len, batch_size=batch_size, device=device)
 
-            print(xb)
-            print(";")
-            print(yb)
-            print("==========")
-
             # evaluate the loss
             logits, loss = model(xb, yb)
 
@@ -63,6 +59,7 @@ if __name__ == "__main__":
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
+            scheduler.step()
 
             bar.set_description(f"loss: {loss.item():.2f}, val loss: {val_losses[-1] if val_losses else 0:.2f}")
             losses.append(loss.item())
@@ -71,6 +68,7 @@ if __name__ == "__main__":
             if not DISABLE_LOG:
                 wandb.log({
                     'train_loss': loss.item(),
+                    'learning_rate': scheduler.get_last_lr()[0],
                     'step': step
                 })
 
@@ -97,6 +95,7 @@ if __name__ == "__main__":
                     save_checkpoint(
                         model=model,
                         optimizer=optimizer,
+                        scheduler=scheduler,
                         step=step+CHECKPOINT_STEP_COUNT,
                         losses=losses,
                         val_losses=val_losses,
@@ -112,6 +111,7 @@ if __name__ == "__main__":
             save_checkpoint(
                 model=model,
                 optimizer=optimizer,
+                scheduler=scheduler,
                 step=step+CHECKPOINT_STEP_COUNT,
                 losses=losses,
                 val_losses=val_losses,
@@ -141,12 +141,14 @@ if __name__ == "__main__":
     model.to(device)
     # model = torch.compile(model)
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=TOTAL_STEPS, eta_min=1e-6)
     data_pull_index = 0
     if CHECKPOINT_PATH is not None:
         _, _, _, data_pull_index = load_checkpoint(
             checkpoint_path=CHECKPOINT_PATH,
             model=model,
-            optimizer=optimizer
+            optimizer=optimizer,
+            scheduler=scheduler
         )
     
     if not DISABLE_LOG:
@@ -156,6 +158,7 @@ if __name__ == "__main__":
             dataset = CORPUS_PATH,
             model = model,
             optimizer=optimizer,
+            scheduler=scheduler,
             seq_len=SEQ_LEN,
             batch_size=BATCH_SIZE,
             total_steps=TOTAL_STEPS
@@ -173,7 +176,7 @@ if __name__ == "__main__":
             config=wandb_config,
         )
     
-    losses, val_losses = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE, data_pull_index=data_pull_index)
+    losses, val_losses = train(model, optimizer, scheduler, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE, data_pull_index=data_pull_index)
     
     if not DISABLE_LOG:
         wandb.finish()

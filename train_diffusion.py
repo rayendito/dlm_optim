@@ -49,6 +49,7 @@ if __name__ == "__main__":
     def train(
             model,
             optimizer,
+            scheduler,
             total_steps,
             seq_len = 256,
             batch_size = 256,
@@ -81,9 +82,12 @@ if __name__ == "__main__":
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
+            scheduler.step()
+
             if not DISABLE_LOG:
                 wandb.log({
                     'train_loss': loss.item(),
+                    'learning_rate': scheduler.get_last_lr()[0],
                     'step': step
                 })
 
@@ -113,6 +117,7 @@ if __name__ == "__main__":
                     save_checkpoint(
                         model=model,
                         optimizer=optimizer,
+                        scheduler=scheduler,
                         step=step+CHECKPOINT_STEP_COUNT,
                         losses=losses,
                         val_losses=val_losses,
@@ -128,6 +133,7 @@ if __name__ == "__main__":
             save_checkpoint(
                 model=model,
                 optimizer=optimizer,
+                scheduler=scheduler,
                 step=step+CHECKPOINT_STEP_COUNT,
                 losses=losses,
                 val_losses=val_losses,
@@ -157,12 +163,14 @@ if __name__ == "__main__":
     # model = torch.compile(model)
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=TOTAL_STEPS, eta_min=1e-6)
     data_pull_index = 0
     if CHECKPOINT_PATH is not None:
         _, _, _, data_pull_index = load_checkpoint(
             checkpoint_path=CHECKPOINT_PATH,
             model=model,
-            optimizer=optimizer
+            optimizer=optimizer,
+            scheduler=scheduler,
         )
 
     wandb_config = get_wandb_config(
@@ -171,6 +179,7 @@ if __name__ == "__main__":
         dataset = CORPUS_PATH,
         model = model,
         optimizer=optimizer,
+        scheduler=scheduler,
         seq_len=SEQ_LEN,
         batch_size=BATCH_SIZE,
         total_steps=TOTAL_STEPS
@@ -187,7 +196,7 @@ if __name__ == "__main__":
             name=EXP_NAME,
             config=wandb_config,
         )
-    losses, val_losses,  = train(model, optimizer, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE, data_pull_index=data_pull_index)
+    losses, val_losses,  = train(model, optimizer, scheduler, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE, data_pull_index=data_pull_index)
     
     if not DISABLE_LOG:
         wandb.finish()
