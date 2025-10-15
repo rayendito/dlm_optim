@@ -43,11 +43,13 @@ def get_batch(data_split, seq_len, batch_size, device):
     y = torch.stack([data_split[i+1:i+seq_len+1] for i in ix])
     return x.to(device), y.to(device)
 
-def get_batch_sequential(data_split, seq_len, batch_size, device, start_index):
+def get_batch_sequential(data_split, seq_len, batch_size, device, start_index, stride=None):
+    if not stride:
+        stride = seq_len
     data_len = len(data_split)
     x, y = [], []
     for b in range(batch_size):
-        i = (start_index + b) % (data_len - seq_len)
+        i = (start_index + b * stride) % (data_len - stride)
         x.append(data_split[i:i+seq_len])
         y.append(data_split[i+1:i+seq_len+1])
     return torch.stack(x).to(device), torch.stack(y).to(device)

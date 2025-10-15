@@ -8,8 +8,7 @@ if __name__ == "__main__":
     MODEL_TYPE = "autoregressive"
     TRAINING_VARIATION = "default"
     EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}"
-    CHECKPOINT_PATH = "model_checkpoints/autoregressive_default_checkpoint_step_999.pt"
-    # CHECKPOINT_PATH = None
+    CHECKPOINT_PATH = None
     CHECKPOINT_STEP_COUNT = 0
     if CHECKPOINT_PATH is not None:
         CHECKPOINT_STEP_COUNT = int(re.search(r'\d+', CHECKPOINT_PATH).group())
@@ -57,7 +56,7 @@ if __name__ == "__main__":
 
             bar.set_description(f"loss: {loss.item():.2f}, val loss: {val_losses[-1] if val_losses else 0:.2f}")
             losses.append(loss.item())
-            data_pull_index += batch_size
+            data_pull_index += batch_size * seq_len
             wandb.log({
                 'train_loss': loss.item(),
                 'step': step
