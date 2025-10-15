@@ -1,7 +1,8 @@
 import torch, wandb, re, argparse
 from tqdm import tqdm
 from architecture.transformers_ar import TransformerConfig, TransformerLM
-from utils.modeling_utils import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
+from train_hyperparams import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL
+from utils.modeling_utils import get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
 from utils.wandb_utils import get_wandb_config, save_checkpoint
 
 if __name__ == "__main__":
@@ -45,11 +46,15 @@ if __name__ == "__main__":
         losses = []
         val_losses = []
         for step in (bar := tqdm(range(total_steps))):  # increase number of steps for good results...
-            # sample a batch of data
-            if(data_pull_index):
+            if(data_pull_index is not None):
                 xb, yb = get_batch_sequential(train_data, seq_len=seq_len, batch_size=batch_size, device=device, start_index=data_pull_index)
             else:
                 xb, yb = get_batch(train_data, seq_len=seq_len, batch_size=batch_size, device=device)
+
+            print(xb)
+            print(";")
+            print(yb)
+            print("==========")
 
             # evaluate the loss
             logits, loss = model(xb, yb)
@@ -87,31 +92,35 @@ if __name__ == "__main__":
                     print('val loss:', val_loss)
             
             if step % CHECKPOINT_INTERVAL == 0:
-                save_checkpoint(
-                    model=model,
-                    optimizer=optimizer,
-                    step=step+CHECKPOINT_STEP_COUNT,
-                    losses=losses,
-                    val_losses=val_losses,
-                    seq_len=seq_len,
-                    batch_size=batch_size,
-                    total_steps=total_steps,
-                    ckpt_name=EXP_NAME,
-                    data_pull_index=data_pull_index,
-                )
+                # TODO(?) decouple saving checkpoint locally and to wandb
+                if not DISABLE_LOG:
+                    save_checkpoint(
+                        model=model,
+                        optimizer=optimizer,
+                        step=step+CHECKPOINT_STEP_COUNT,
+                        losses=losses,
+                        val_losses=val_losses,
+                        seq_len=seq_len,
+                        batch_size=batch_size,
+                        total_steps=total_steps,
+                        ckpt_name=EXP_NAME,
+                        data_pull_index=data_pull_index,
+                    )
         print('final loss:', loss.item(), 'final val loss:', val_loss)
-        save_checkpoint(
-            model=model,
-            optimizer=optimizer,
-            step=step+CHECKPOINT_STEP_COUNT,
-            losses=losses,
-            val_losses=val_losses,
-            seq_len=seq_len,
-            batch_size=batch_size,
-            total_steps=total_steps,
-            data_pull_index=data_pull_index,
-            ckpt_name=EXP_NAME
-        )
+        # TODO(?) decouple saving checkpoint locally and to wandb
+        if not DISABLE_LOG:
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                step=step+CHECKPOINT_STEP_COUNT,
+                losses=losses,
+                val_losses=val_losses,
+                seq_len=seq_len,
+                batch_size=batch_size,
+                total_steps=total_steps,
+                data_pull_index=data_pull_index,
+                ckpt_name=EXP_NAME
+            )
         return losses, val_losses
     
     def test_generation(model, sentence, max_new_tokens=50):
@@ -139,7 +148,6 @@ if __name__ == "__main__":
             model=model,
             optimizer=optimizer
         )
-        breakpoint()
     
     if not DISABLE_LOG:
         wandb_config = get_wandb_config(

@@ -1,26 +1,6 @@
 import torch
 import json
 
-# DATASET MACROS
-TRAIN_SPLIT_SIZE = 0.99
-CORPUS_PATH = "data/animesubs.txt"
-
-# MODELING MACROS
-SEQ_LEN = 512
-EMBEDDING_SIZE = 256
-ATTN_HEAD_COUNT = 4
-LAYER_NUM = 6
-
-VAL_STEPS = 10
-VAL_INTERVAL = 50
-
-CHECKPOINT_INTERVAL = 500
-
-# TRAINING MACROS
-BATCH_SIZE = 256
-TOTAL_STEPS = 1000
-
-
 def get_corpus(dataset_path):
     with open(dataset_path, 'r', encoding='latin') as f:
         text = f.read()
@@ -44,12 +24,12 @@ def get_batch(data_split, seq_len, batch_size, device):
     return x.to(device), y.to(device)
 
 def get_batch_sequential(data_split, seq_len, batch_size, device, start_index, stride=None):
-    if not stride:
-        stride = seq_len
+    if stride is None:
+        stride = seq_len  # non-overlapping by default
     data_len = len(data_split)
     x, y = [], []
     for b in range(batch_size):
-        i = (start_index + b * stride) % (data_len - stride)
+        i = (start_index + b * stride) % (data_len - seq_len)
         x.append(data_split[i:i+seq_len])
         y.append(data_split[i+1:i+seq_len+1])
     return torch.stack(x).to(device), torch.stack(y).to(device)
