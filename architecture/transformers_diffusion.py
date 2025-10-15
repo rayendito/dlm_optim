@@ -146,7 +146,10 @@ class MultiHeadAttention(nn.Module):
             # compute attention scores ("affinities")
             wei = q @ k.transpose(-2,-1) # (B, H, 1, C/H) @ (B, H, C/H, T) -> (B, H, 1, T)
             wei = wei * self.head_size ** -0.5 # scaled attention
-            wei = wei.masked_fill(self.tril[T_k-T:T_k, T_k-T:T_k] == 0, float('-inf')) # (B, T, T)
+            
+            # no attention masking in diffusion models
+            # wei = wei.masked_fill(self.tril[T_k-T:T_k, T_k-T:T_k] == 0, float('-inf')) # (B, T, T)
+            
             wei = F.softmax(wei, dim=-1) # (B, H, T, T)
             # apply attention to values
             out = wei @ v # (B, H, 1, T) @ (B, H, T, C/H) -> (B, H, 1, C/H)
