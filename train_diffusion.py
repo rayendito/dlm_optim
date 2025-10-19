@@ -22,8 +22,13 @@ def mask_tokens_batch(input_ids,  eps: float=1e-3, fixed_p_mask = None):
     return noisy_batch, masked_indices, p_mask
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--p", type=float, default=None)
+    parser.add_argument("--disable_log", action="store_true")
+    args = parser.parse_args()
+
     MODEL_TYPE = "diffusion"
-    TRAINING_VARIATION = "default"
+    TRAINING_VARIATION = f"p{args.p}" if args.p is not None else "default"
     EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}"
     CHECKPOINT_PATH = None
     CHECKPOINT_STEP_COUNT = 0
@@ -32,9 +37,7 @@ if __name__ == "__main__":
         EXP_NAME = f"{CHECKPOINT_STEP_COUNT}_" + EXP_NAME
     
     # DISABLING WANDB LOGS FOR DEBUGGING
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--disable_log", action="store_true")
-    DISABLE_LOG = parser.parse_args().disable_log
+    DISABLE_LOG = args.disable_log
 
     # DEVICE "MACRO"
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -74,7 +77,7 @@ if __name__ == "__main__":
             #     random_length = torch.randint(1, xb.shape[1] + 1, (1,))
             #     xb = xb[:, :random_length]
             
-            noisy_batch, masked_indices, p_mask = mask_tokens_batch(xb)
+            noisy_batch, masked_indices, p_mask = mask_tokens_batch(xb, fixed_p_mask=args.p)
 
             # evaluate the loss using standard next-token prediction
             logits, loss = model(noisy_batch, targets=xb, masked_indices=masked_indices, p_mask=p_mask)

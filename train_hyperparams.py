@@ -1,6 +1,6 @@
 # DATASET MACROS
 TRAIN_SPLIT_SIZE = 0.99
-CORPUS_PATH = "data/animesubs.txt"
+CORPUS_PATH = "data/fineweb_100K.txt"
 
 # MODELING MACROS
 SEQ_LEN = 512
