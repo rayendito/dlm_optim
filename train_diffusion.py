@@ -7,17 +7,22 @@ from utils.wandb_utils import get_wandb_config, save_checkpoint
 
 MASK_INDEX = 0 # ctoi["\U0001F0A0"]
 
-def mask_tokens_batch(input_ids,  eps: float=1e-3, fixed_p_mask = None):
-    b, l = input_ids.shape # batch size, length
-    if fixed_p_mask is not None:
-        assert fixed_p_mask > 0
-        t = torch.tensor([fixed_p_mask] * b, device=input_ids.device, dtype=torch.float32)
-    else:
-        t = torch.rand(b, device=input_ids.device)
-    p_mask = (1 - eps) * t + eps # making sure it's not 0. add with some eps
-    p_mask = p_mask[:, None].repeat(1, l) # multiplying it by the dimension
-    masked_indices = torch.rand((b, l), device=input_ids.device) < p_mask # masked_indices: bool^{b x l}
+def mask_tokens_batch(input_ids,  eps: float=1e-3, fixed_p_mask = None, kappa=20):
     mask_token_idx = MASK_INDEX
+    B, T = input_ids.shape # batch size, length
+    if fixed_p_mask is None:
+        t = torch.rand(B, device=input_ids.device)
+        p_mask = (1 - eps) * t + eps # making sure it's not 0. add with some eps
+        p_mask = p_mask[:, None].repeat(1, T) # multiplying it by the dimension
+    else:
+        assert fixed_p_mask > 0
+        p = fixed_p_mask
+        alpha = (kappa * p)
+        beta  = (kappa * (1 - p))
+        dist = torch.distributions.Beta(alpha, beta)
+        p_mask = dist.sample((B, 1)).expand(B, T)
+    
+    masked_indices = torch.rand((B, T), device=input_ids.device) < p_mask # masked_indices: bool^{b x l}
     noisy_batch = torch.where(masked_indices, mask_token_idx, input_ids) # noisy_batch: token_idx^{b x l}
     return noisy_batch, masked_indices, p_mask
 
@@ -80,17 +85,21 @@ if __name__ == "__main__":
             noisy_batch, masked_indices, p_mask = mask_tokens_batch(xb, fixed_p_mask=args.p)
 
             # evaluate the loss using standard next-token prediction
-            logits, loss = model(noisy_batch, targets=xb, masked_indices=masked_indices, p_mask=p_mask)
+            torch.cuda.synchronize()
+            with torch.cuda.nvtx.range("FORWARD"):
+                logits, loss = model(noisy_batch, targets=xb, masked_indices=masked_indices, p_mask=p_mask)
             # token_loss = F.cross_entropy(
             #     logits[masked_indices], xb[masked_indices], reduction='none'
             # ) / p_mask[masked_indices]
             # loss = token_loss.sum() / (xb.shape[0] * xb.shape[1])
 
-            # backprop
-            optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
+            with torch.cuda.nvtx.range("BACKWARD"):
+                # backprop
+                optimizer.zero_grad(set_to_none=True)
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
+            torch.cuda.synchronize()
 
             if not DISABLE_LOG:
                 wandb.log({
