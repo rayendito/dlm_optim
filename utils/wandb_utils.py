@@ -29,7 +29,7 @@ def get_wandb_config(model_type, variation, dataset, model, optimizer, scheduler
 
     return config
 
-def save_checkpoint(model, optimizer, scheduler, step, losses, val_losses, seq_len, batch_size, total_steps, ckpt_name, data_pull_index, save_dir="model_checkpoints"):
+def save_checkpoint(model, optimizer, scheduler, step, losses, val_losses, seq_len, batch_size, total_steps, ckpt_name, data_pull_index, save_dir="model_checkpoints", p_abl_val_losses=None):
     """Save a complete checkpoint including model, optimizer, scheduler states and training metrics"""
     os.makedirs(save_dir, exist_ok=True)
     
@@ -40,6 +40,7 @@ def save_checkpoint(model, optimizer, scheduler, step, losses, val_losses, seq_l
         'scheduler_state_dict': scheduler.state_dict(),
         'train_losses': losses,
         'val_losses': val_losses,
+        'p_abl_val_losses':p_abl_val_losses,
         'config': {
             'seq_len': seq_len,
             'batch_size': batch_size,

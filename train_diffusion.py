@@ -20,7 +20,7 @@ def mask_tokens_batch(input_ids,  eps: float=1e-3, fixed_p_mask = None, kappa=20
         alpha = (kappa * p)
         beta  = (kappa * (1 - p))
         dist = torch.distributions.Beta(alpha, beta)
-        p_mask = dist.sample((B, 1)).expand(B, T)
+        p_mask = dist.sample((B, 1)).to(input_ids.device).expand(B, T)
     
     masked_indices = torch.rand((B, T), device=input_ids.device) < p_mask # masked_indices: bool^{b x l}
     noisy_batch = torch.where(masked_indices, mask_token_idx, input_ids) # noisy_batch: token_idx^{b x l}
@@ -70,6 +70,10 @@ if __name__ == "__main__":
     ):
         losses = []
         val_losses = []
+        
+        VAL_MASK_Ps = [0.15, 0.25, 0.5, 0.75, 0.95]
+        p_ablated_val_losses = {str(p) : [] for p in VAL_MASK_Ps}
+        
         for step in (bar := tqdm(range(total_steps))):  # increase number of steps for good results...
             # sample a batch of data
             if(data_pull_index):
@@ -115,19 +119,33 @@ if __name__ == "__main__":
                 # Calculate validation loss
                 with torch.no_grad():
                     val_loss = 0
+                    p_ablate_val_loss = {str(p) : 0 for p in VAL_MASK_Ps}
                     for _ in range(VAL_STEPS):
                         xb, yb = get_batch(val_data, seq_len=seq_len, batch_size=batch_size, device=device)
                         noisy_batch, masked_indices, p_mask = mask_tokens_batch(xb)
-                        logits, val_loss_batch = model(noisy_batch, targets=xb, masked_indices=masked_indices, p_mask=p_mask)
+                        _, val_loss_batch = model(noisy_batch, targets=xb, masked_indices=masked_indices, p_mask=p_mask)
                         val_loss += val_loss_batch.item()
+
+                        for pm in VAL_MASK_Ps:
+                            pm_noisy_batch, pm_masked_indices, pm_p_mask = mask_tokens_batch(xb, fixed_p_mask=pm)
+                            _, pm_val_loss_batch = model(pm_noisy_batch, targets=xb, masked_indices=pm_masked_indices, p_mask=pm_p_mask)
+                            p_ablate_val_loss[str(pm)] += pm_val_loss_batch
+
                     val_loss /= VAL_STEPS
                     val_losses.append(val_loss)
+
+                    p_ablate_val_loss = {p : vl/VAL_STEPS for p, vl in p_ablate_val_loss.items()}
+                    for pavls in p_ablated_val_losses:
+                        p_ablated_val_losses[pavls].append(p_ablate_val_loss[pavls])
+
                     if not DISABLE_LOG:
                         wandb.log({
                             'val_loss': val_loss,
+                            **p_ablate_val_loss,
                             'step': step
                         })
                     print('val loss:', val_loss)
+            
             if step % CHECKPOINT_INTERVAL == 0:
                 # TODO(?) decouple saving checkpoint locally and to wandb
                 if not DISABLE_LOG:
@@ -138,6 +156,7 @@ if __name__ == "__main__":
                         step=step+CHECKPOINT_STEP_COUNT,
                         losses=losses,
                         val_losses=val_losses,
+                        p_abl_val_losses=p_ablated_val_losses,
                         seq_len=seq_len,
                         batch_size=batch_size,
                         total_steps=total_steps,
@@ -154,13 +173,14 @@ if __name__ == "__main__":
                 step=step+CHECKPOINT_STEP_COUNT,
                 losses=losses,
                 val_losses=val_losses,
+                p_abl_val_losses=p_ablated_val_losses,
                 seq_len=seq_len,
                 batch_size=batch_size,
                 total_steps=total_steps,
                 data_pull_index=data_pull_index,
                 ckpt_name=EXP_NAME
             )
-        return losses, val_losses
+        return losses, val_losses, p_ablated_val_losses
 
     def test_generation(model, sentence):
         idx = encode(sentence)
@@ -213,7 +233,7 @@ if __name__ == "__main__":
             name=EXP_NAME,
             config=wandb_config,
         )
-    losses, val_losses,  = train(model, optimizer, scheduler, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE, data_pull_index=data_pull_index)
+    losses, val_losses, p_ablated_val_losses  = train(model, optimizer, scheduler, total_steps=TOTAL_STEPS, seq_len=SEQ_LEN, batch_size=BATCH_SIZE, data_pull_index=data_pull_index)
     
     if not DISABLE_LOG:
         wandb.finish()
