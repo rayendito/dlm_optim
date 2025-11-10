@@ -37,14 +37,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     MODEL_TYPE = "diffusion"
+    KAPPA = args.kappa
     TRAINING_VARIATION = f"p{args.p}" if args.p is not None else "default"
-    EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}"
+    EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}_k{KAPPA}"
     CHECKPOINT_PATH = None
     CHECKPOINT_STEP_COUNT = 0
     if CHECKPOINT_PATH is not None:
         CHECKPOINT_STEP_COUNT = int(re.search(r'\d+', CHECKPOINT_PATH).group())
         EXP_NAME = f"{CHECKPOINT_STEP_COUNT}_" + EXP_NAME
-    KAPPA = args.kappa
     # DISABLING WANDB LOGS FOR DEBUGGING
     DISABLE_LOG = args.disable_log
 
