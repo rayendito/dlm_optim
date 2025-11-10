@@ -30,6 +30,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--p", type=float, default=None)
     parser.add_argument("--disable_log", action="store_true")
+    parser.add_argument("--kappa", type=int, default=20)
     args = parser.parse_args()
 
     MODEL_TYPE = "diffusion"
@@ -40,7 +41,7 @@ if __name__ == "__main__":
     if CHECKPOINT_PATH is not None:
         CHECKPOINT_STEP_COUNT = int(re.search(r'\d+', CHECKPOINT_PATH).group())
         EXP_NAME = f"{CHECKPOINT_STEP_COUNT}_" + EXP_NAME
-    
+    KAPPA = args.kappa
     # DISABLING WANDB LOGS FOR DEBUGGING
     DISABLE_LOG = args.disable_log
 
@@ -86,7 +87,7 @@ if __name__ == "__main__":
             #     random_length = torch.randint(1, xb.shape[1] + 1, (1,))
             #     xb = xb[:, :random_length]
             
-            noisy_batch, masked_indices, p_mask = mask_tokens_batch(xb, fixed_p_mask=args.p)
+            noisy_batch, masked_indices, p_mask = mask_tokens_batch(xb, fixed_p_mask=args.p, kappa=KAPPA)
 
             # evaluate the loss using standard next-token prediction
             torch.cuda.synchronize()
