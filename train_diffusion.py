@@ -6,6 +6,9 @@ from utils.modeling_utils import get_corpus, get_vocab_dict, get_train_val_split
 from utils.wandb_utils import get_wandb_config, save_checkpoint
 
 MASK_INDEX = 0 # ctoi["\U0001F0A0"]
+seed = 42
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
 
 def mask_tokens_batch(input_ids,  eps: float=1e-3, fixed_p_mask = None, kappa=20):
     mask_token_idx = MASK_INDEX
