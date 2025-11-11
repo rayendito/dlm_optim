@@ -26,6 +26,14 @@ def mask_tokens_batch(input_ids,  eps: float=1e-3, fixed_p_mask = None, kappa=20
         p_mask = dist.sample((B, 1)).to(input_ids.device).expand(B, T)
     
     masked_indices = torch.rand((B, T), device=input_ids.device) < p_mask # masked_indices: bool^{b x l}
+    # re-sample only for sequences that are fully masked
+    while True:
+        fully_masked = masked_indices.all(dim=1)
+        if not fully_masked.any():
+            break
+        # re-draw only for those sequences
+        masked_indices[fully_masked] = torch.rand((fully_masked.sum(), T), device=input_ids.device) < p_mask[fully_masked]
+
     noisy_batch = torch.where(masked_indices, mask_token_idx, input_ids) # noisy_batch: token_idx^{b x l}
     return noisy_batch, masked_indices, p_mask
 
@@ -201,7 +209,7 @@ if __name__ == "__main__":
         layer_num=LAYER_NUM
     )
     model = DiffusionTransformerLM(model_config)
-    # model = torch.compile(model)
+    model = torch.compile(model)
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=TOTAL_STEPS, eta_min=1e-6)
