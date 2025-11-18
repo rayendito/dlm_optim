@@ -1,6 +1,7 @@
 # %% Cell 1
 import wandb
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 api = wandb.Api()
 
@@ -40,8 +41,22 @@ def plot_heatmap(title, to_viz):
     df = pd.DataFrame(to_viz)  # runs as rows, metrics as columns
     df = df.sort_index()
     plt.figure(figsize=(10, 3))
-    plt.imshow(df, cmap="YlGn_r", aspect="auto", vmin=0, vmax=3.7)
+    cmap = plt.cm.YlGn_r
+    norm = plt.Normalize(vmin=df.min().min(), vmax=df.max().max())
+
+    im = plt.imshow(df, cmap=cmap, aspect="auto", norm=norm)
     plt.colorbar(label="Loss (lower = better)")
+    # annotate each cell
+    for i in range(df.shape[0]):          # rows (metrics)
+        for j in range(df.shape[1]):      # columns (runs)
+            val = df.iloc[i, j]
+            color = cmap(norm(val))[:3]   # RGB color of cell
+            # compute perceived brightness (luminance)
+            brightness = np.dot(color, [0.299, 0.587, 0.114])
+            text_color = "black" if brightness > 0.5 else "white"
+            plt.text(j, i, f"{val:.2f}",
+                     ha="center", va="center",
+                     color=text_color, fontsize=9)
 
     plt.xticks(range(len(df.columns)), df.columns, rotation=45, ha="right")
     plt.yticks(range(len(df.index)), df.index)
@@ -67,10 +82,10 @@ def visualize_losses(title, run_path_list, columns_to_show):
     plot_heatmap(title, to_viz)
 
 # %% duar
-visualize_losses("General Losses of P experiments", P_RUNS, ["train_loss", "val_loss"])
+visualize_losses("General Losses of P experiments", DEFAULT_BASELINE + P_RUNS, ["train_loss", "val_loss"])
 
 # %% duar
-visualize_losses("General Losses of P experiments", P_RUNS, ["0.15", "0.25", "0.5", "0.75", "0.95"])
+visualize_losses("General Losses of P experiments", DEFAULT_BASELINE + P_RUNS, ["0.15", "0.25", "0.5", "0.75", "0.95"])
 
 
 # %% Cell 3
