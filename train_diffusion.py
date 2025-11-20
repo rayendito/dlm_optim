@@ -10,21 +10,26 @@ seed = 42
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 
-def mask_tokens_batch(input_ids,  eps: float=1e-3, fixed_p_mask = None, kappa=20):
+def mask_tokens_batch(input_ids,  eps: float=1e-3, fixed_p_mask = None, kappa=20, curriculum_step=None):
     mask_token_idx = MASK_INDEX
     B, T = input_ids.shape # batch size, length
-    if fixed_p_mask is None:
-        t = torch.rand(B, device=input_ids.device)
+    if curriculum_step is None:
+        if fixed_p_mask is None:
+            t = torch.rand(B, device=input_ids.device)
+            p_mask = (1 - eps) * t + eps # making sure it's not 0. add with some eps
+            p_mask = p_mask[:, None].repeat(1, T) # multiplying it by the dimension
+        else:
+            assert fixed_p_mask > 0
+            p = fixed_p_mask
+            alpha = (kappa * p)
+            beta  = (kappa * (1 - p))
+            dist = torch.distributions.Beta(alpha, beta)
+            p_mask = dist.sample((B, 1)).to(input_ids.device).expand(B, T)
+    else:
+        t = torch.rand(B, device=input_ids.device) * curriculum_step
         p_mask = (1 - eps) * t + eps # making sure it's not 0. add with some eps
         p_mask = p_mask[:, None].repeat(1, T) # multiplying it by the dimension
-    else:
-        assert fixed_p_mask > 0
-        p = fixed_p_mask
-        alpha = (kappa * p)
-        beta  = (kappa * (1 - p))
-        dist = torch.distributions.Beta(alpha, beta)
-        p_mask = dist.sample((B, 1)).to(input_ids.device).expand(B, T)
-    
+
     masked_indices = torch.rand((B, T), device=input_ids.device) < p_mask # masked_indices: bool^{b x l}
     # re-sample only for sequences that are fully masked
     while True:
