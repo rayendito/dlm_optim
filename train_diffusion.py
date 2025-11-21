@@ -47,12 +47,14 @@ if __name__ == "__main__":
     parser.add_argument("--p", type=float, default=None)
     parser.add_argument("--disable_log", action="store_true")
     parser.add_argument("--kappa", type=int, default=20)
+    parser.add_argument("--curriculum", action="store_true")
     args = parser.parse_args()
 
     MODEL_TYPE = "diffusion"
     KAPPA = args.kappa
+    CURRICULUM = args.curriculum
     TRAINING_VARIATION = f"p{args.p}" if args.p is not None else "default"
-    EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}_k{KAPPA}"
+    EXP_NAME = f"{MODEL_TYPE}_{TRAINING_VARIATION}_k{KAPPA}_c-{CURRICULUM}"
     CHECKPOINT_PATH = None
     CHECKPOINT_STEP_COUNT = 0
     if CHECKPOINT_PATH is not None:
@@ -103,7 +105,13 @@ if __name__ == "__main__":
             #     random_length = torch.randint(1, xb.shape[1] + 1, (1,))
             #     xb = xb[:, :random_length]
             
-            noisy_batch, masked_indices, p_mask = mask_tokens_batch(xb, fixed_p_mask=args.p, kappa=KAPPA)
+            curriculum_step = None
+            if (CURRICULUM):
+                curriculum_chunksize = total_steps//len(VAL_MASK_Ps)
+                idx = min(step // curriculum_chunksize, len(VAL_MASK_Ps) - 1)
+                curriculum_step = VAL_MASK_Ps[idx]
+            
+            noisy_batch, masked_indices, p_mask = mask_tokens_batch(xb, fixed_p_mask=args.p, kappa=KAPPA, curriculum_step=curriculum_step)
 
             # evaluate the loss using standard next-token prediction
             torch.cuda.synchronize()
