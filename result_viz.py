@@ -36,10 +36,14 @@ def get_lowest_from_history(run_history):
         if col in RUN_METRICS
     }
 
-def plot_heatmap(title, to_viz):
+def plot_heatmap(title, to_viz, col_name_todelete, col_name_toreplace):
     # Convert nested dict → DataFrame
     df = pd.DataFrame(to_viz)  # runs as rows, metrics as columns
     df = df.sort_index()
+    for cnd in col_name_todelete:
+        df.columns = df.columns.str.replace(cnd, "", regex=False)
+    for cnr in col_name_toreplace:
+        df.columns = df.columns.str.replace(cnr[0], cnr[1], regex=False)
     plt.figure(figsize=(10, 3))
     cmap = plt.cm.YlGn_r
     norm = plt.Normalize(vmin=df.min().min(), vmax=df.max().max())
@@ -56,17 +60,17 @@ def plot_heatmap(title, to_viz):
             text_color = "black" if brightness > 0.5 else "white"
             plt.text(j, i, f"{val:.2f}",
                      ha="center", va="center",
-                     color=text_color, fontsize=9)
+                     color=text_color, fontsize=9, fontweight="bold")
 
     plt.xticks(range(len(df.columns)), df.columns, rotation=45, ha="right")
     plt.yticks(range(len(df.index)), df.index)
     plt.title(title)
-    plt.ylabel("Metric")
+    plt.ylabel("Validation")
     plt.xlabel("Run")
     plt.tight_layout()
     plt.show()
 
-def visualize_losses(title, run_path_list, columns_to_show):
+def visualize_losses(title, run_path_list, columns_to_show, col_name_todelete, col_name_toreplace):
     to_viz = {}
     for run_path in run_path_list:
         run = api.run(run_path)
@@ -79,15 +83,36 @@ def visualize_losses(title, run_path_list, columns_to_show):
             
         filtered = {k: v for k, v in best_runs.items() if k in columns_to_show}
         to_viz[run.name] = filtered
-    plot_heatmap(title, to_viz)
+    plot_heatmap(title, to_viz, col_name_todelete, col_name_toreplace)
 
-# %% duar
-visualize_losses("General Losses of P experiments", DEFAULT_BASELINE + P_RUNS, ["train_loss", "val_loss"])
+# %% general P losses
+visualize_losses(
+    "General Losses of W experiments",
+    DEFAULT_BASELINE + P_RUNS,
+    ["train_loss", "val_loss"],
+    col_name_todelete=["diffusion_", "_k20"],
+    col_name_toreplace=[("p", "w")],
+)
 
-# %% duar
-visualize_losses("General Losses of P experiments", DEFAULT_BASELINE + P_RUNS, ["0.15", "0.25", "0.5", "0.75", "0.95"])
+# %% evaluated on different scenarios
+visualize_losses(
+    "W experiments on Different Validation Scenarios",
+    DEFAULT_BASELINE + P_RUNS,
+    ["0.15", "0.25", "0.5", "0.75", "0.95"],
+    col_name_todelete=["diffusion_", "_k20"],
+    col_name_toreplace=[("p", "w")],
+)
 
 
+# %% evaluated on different scenarios
+visualize_losses(
+    r"$W=0.5$ experiment with different $\kappa$",
+    DEFAULT_BASELINE + KAPPA_RUNS,
+    ["0.15", "0.25", "0.5", "0.75", "0.95"],
+    col_name_todelete=["diffusion_", "p0.5_","_k20"],
+    col_name_toreplace=[("p", "w")],
+)
+# 
 # %% Cell 3
 df.columns
 # %% Cell 3
