@@ -7,9 +7,10 @@ from torch.nn.attention.flex_attention import flex_attention, create_block_mask
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class TidarTransformerConfig:
-    def __init__(self, vocab_size, seq_len, embed_size, head_num, layer_num):
+    def __init__(self, vocab_size, seq_len, diffus_block_size, embed_size, head_num, layer_num):
         self.vocab_size = vocab_size
         self.seq_len = seq_len
+        self.diffus_block_size = diffus_block_size
         self.embed_size = embed_size
         self.head_num = head_num
         self.layer_num = layer_num
@@ -108,11 +109,15 @@ class MultiHeadAttention(nn.Module):
         self.query = nn.Linear(config.embed_size, config.embed_size, bias=False)
         self.value = nn.Linear(config.embed_size, config.embed_size, bias=False)
         self.o = nn.Linear(config.embed_size, config.embed_size)
+        
         # block_mask for FlexAttention
         def causal(b, h, q_idx, kv_idx):
             causal_mask = q_idx >= kv_idx
             return causal_mask
         self.causal_mask = create_block_mask(causal, B=None, H=None, Q_LEN=config.seq_len, KV_LEN=config.seq_len)
+        
+        
+        
         self.freqs_cis = precompute_freqs_cis(config.embed_size//config.head_num, config.seq_len)
         self.register_buffer('tril', torch.tril(torch.ones(config.seq_len, config.seq_len)))
 
@@ -168,7 +173,7 @@ class Block(nn.Module):
         h = x + a
         o = h + self.ff_layer(self.ff_norm(h))
         return o, kv_cache
-    
+ 
 class TidarTransformerLM(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -182,6 +187,7 @@ class TidarTransformerLM(nn.Module):
         self.lm_head = nn.Linear(config.embed_size, config.vocab_size)
         # transformer blocks
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.layer_num)])
+        
 
     def forward(self, idx, targets=None, masked_indices=None, p_mask=None, kv_cache=None):
         B, T = idx.shape

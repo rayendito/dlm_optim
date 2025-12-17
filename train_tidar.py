@@ -1,7 +1,7 @@
 import torch, wandb, re, argparse
 from tqdm import tqdm
 from architecture.transformers_tidar import TidarTransformerConfig, TidarTransformerLM
-from hyperparams import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL
+from hyperparams import TRAIN_SPLIT_SIZE, CORPUS_PATH, SEQ_LEN, EMBEDDING_SIZE, ATTN_HEAD_COUNT, LAYER_NUM, BATCH_SIZE, TOTAL_STEPS, VAL_STEPS, VAL_INTERVAL, CHECKPOINT_INTERVAL, DIFFUS_BLOCK_SIZE
 from utils.modeling_utils import get_corpus, get_vocab_dict, get_train_val_split, get_batch, get_batch_sequential, load_checkpoint
 from utils.wandb_utils import get_wandb_config, save_checkpoint
 from train_diffusion import mask_tokens_batch
@@ -156,6 +156,7 @@ if __name__ == "__main__":
     model_config = TidarTransformerConfig(
         vocab_size=VOCAB_SIZE,
         seq_len=SEQ_LEN,
+        diffus_block_size=DIFFUS_BLOCK_SIZE,
         embed_size=EMBEDDING_SIZE,
         head_num=ATTN_HEAD_COUNT,
         layer_num=LAYER_NUM
